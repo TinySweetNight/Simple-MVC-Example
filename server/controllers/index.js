@@ -6,11 +6,23 @@ const {Cat} = models;
 const hostIndex = (req, res) => {
   let name = 'unknown';
 
-  res.render('index', {
-    currentName: name,
-    title: 'Home',
-    pageName: 'Home Page'
-  });
+  try{
+    const doc = Cat.findOne(
+      {},
+      {},
+      {sort: {createdDate: 'descending'}}
+    )
+    .lean()
+    .exec();
+
+    if(doc) {
+      name = doc.name;
+    }
+
+  } catch (err) {
+
+  }
+
 };
 
 const hostPage1 = async(req, res) => {
@@ -20,7 +32,10 @@ const hostPage1 = async(req, res) => {
 
   } catch(err){
     console.log(err);
-    return res.status(500).json({error:'failed to ind cats'});
+    if (err.code === 11000){
+      return res.status(400).json({ error: 'A cat with that name already exists'});
+    }
+    return res.status(500).json({error:'failed to find cats'});
   }
 
 };
@@ -33,7 +48,24 @@ const hostPage3 = (req, res) => {
   res.render('page3');
 };
 
-const getName = (req, res) => {
+const getName = async (req, res) => {
+  try{
+    const doc = await Cat.findOne({})
+    .sort({createdDate: 'descending'})
+    .lean()
+    .exec();
+
+    if(!doc){
+      return res.status(404).json({error: 'No Cat Found'})
+    };
+
+    return res.json({name: doc.name});
+
+  } catch(err){
+    console.log(err);
+    return res.status(500).json({error: 'Something went wrong with the DB'})
+
+  }
 
 };
 
@@ -56,19 +88,53 @@ const setName = async (req, res) => {
     });
   } catch(err){
     console.log(err);
-    return res.status(500).json({error: 'Failed to create'})
+    return res.status(500).json({error: 'Failed to create'});
 
   }
   
 };
 
-const searchName = (req, res) => {
+const searchName = async (req, res) => {
   if (!req.query.name) {
     return res.status(400).json({ error: 'Name is required to perform a search' });
+  }
+
+  try{
+    const doc = await Cat.findOne({name: req.query.name})
+    .select('name bedsOwned')
+    .exec();
+
+    if(!doc){
+      return res.status(404).json({Error: "No Cat Found"})
+    }
+    console.log(doc);
+
+    return res.json({name: doc.name, beds: doc.bedsOwned});
+
+  } catch(err){
+     console.log(err);
+    return res.status(500).json({error: 'Something went wrong'})
+
+
   }
 };
 
 const updateLast = (req, res) => {
+  const updatePromise = Cat.findOneAndUpdate(
+    {},
+    { $inc: {bedsOwned: 1}},
+    {returnDocument: 'after', sort: {createdDate: 'descending'}}
+  ).lean().exec();
+
+  updatePromise.then((doc) => res.json({
+    name: doc.name,
+    beds: doc.bedsOwned
+  }))
+
+  .catch((err) =>{
+    console.log(err);
+    return res.status(500).json({error: 'Something Went Wrong!'});
+  })
 	
 };
 
